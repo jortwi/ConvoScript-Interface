@@ -1,0 +1,165 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConvoScript</title>
+
+    <!-- AI Foundry Library -->
+    <script src="./AI_Foundry_Library.js"></script>
+    <!-- ConvoScript Library -->
+    <script src="./ConvoScript.js"></script>
+    <!-- PicoCSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css">
+
+    <!-- CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/closebrackets.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+</head>
+
+<body>
+    <header class="">
+
+
+        <div style="display: flex; justify-content: space-between ; align-items: center; margin: 0 4vw ">
+
+            <h1 style="margin: 0;">ConvoScript Interface</h1>
+            <button id="switchDevModeButton" class="contrast" onclick="switchDevMode()">Switch
+                to User
+                Mode</button>
+        </div>
+
+
+
+    </header>
+    <main class="container">
+        <section>
+            <div hidden id="userView">
+                <button id="start" onclick="start()">Start</button>
+                <div class="pico-color-red-500" id="error"></div>
+                <div id="placeResults"></div>
+                <progress hidden id="load"></progress>
+                <input id="input" type="hidden"></input>
+                <button hidden id="btn">Send</button>
+            </div>
+            <div id="devView">
+                <section>
+
+                    <button onclick="addScript()">Add additional script</button>
+                    <a role="button" target="_blank" href="https://github.com/jortwi/ConvoScript_Library">Help</a>
+
+                </section>
+                <div role="group">
+                    <h3>Script Name: "script1"</h3>
+                </div>
+                <textarea id="code" name="code">
+
+            </textarea>
+
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const api_token = "df-abc123...="
+
+        const convoScript = new ConvoScript({
+            api_token: api_token, //your data foundry api token
+            resultElementSelector: '#placeResults', //the HTML element where the conversation will be placed
+            loadingElementSelector: '#load', //the HTML element that shows a loading icon when waiting for AI requests
+            inputElementSelector: '#input', //the HTML input element that is used by the user to give input
+            acceptButtonElementSelector: '#btn', //the HTML button that is used to send user messages
+            delayTime: 500, //A delay after every message that can help distinguish incoming messages
+        })
+
+        // Initialize CodeMirror
+        const codeEditor1 = CodeMirror.fromTextArea(document.getElementById("code"), {
+            lineNumbers: true,
+            mode: "javascript",
+            autoCloseBrackets: true,
+        });
+
+        let initialScript = [
+            {
+                role: 'assistant',
+                content: 'Hi, how can I help you'
+            },
+            {
+                role: 'user',
+                content: { content: 'input', type: 'text' }
+            },
+            {
+                role: 'function',
+                content: 'textToText',
+                messages: "${script1.slice(0,2)}"
+            }
+        ]
+
+        codeEditor1.setValue(formatAsJavascript(initialScript))
+
+        let scriptNr = 1
+        async function start() {
+            convoScript.arrays = {} //remove scripts 
+            for (let i = 1; i <= scriptNr; i++) {
+                try {
+                    eval(`script${i} = convoScript.addScript("script${i}", eval(codeEditor${i}.getValue()))`)
+                } catch (err) {
+                    document.querySelector('#error').innerHTML = `An error occurred in script${i}. Check console for more information.`
+                    console.error(err)
+                    eval(`script${i} = convoScript.addScript("script${i}", [])`) //use empty array if there is an issue
+                }
+
+            }
+            await convoScript.run(script1)
+        }
+
+        let devMode = true
+        function switchDevMode() {
+            if (devMode) {
+                document.querySelector('#devView').setAttribute('hidden', '')
+                document.querySelector('#userView').removeAttribute('hidden')
+            } else {
+                document.querySelector('#userView').setAttribute('hidden', '')
+                document.querySelector('#devView').removeAttribute('hidden')
+            }
+            devMode = !devMode
+        }
+
+        function addScript() {
+            scriptNr += 1
+            document.querySelector('#devView').insertAdjacentHTML('beforeend', `<div role="group"><h3>Script Name: "script${scriptNr}"</h3></div><textarea id="code${scriptNr}" name="code${scriptNr}">
+            </textarea>`)
+
+            eval(`codeEditor${scriptNr} = CodeMirror.fromTextArea(document.getElementById("code${scriptNr}"), {
+                lineNumbers: true,
+                mode: "javascript",
+                autoCloseBrackets: true,
+            });` )
+        }
+
+        function formatAsJavascript(value, indentLevel = 0) {
+            const indent = "  ".repeat(indentLevel);
+            const innerIndent = "  ".repeat(indentLevel + 1);
+
+            if (Array.isArray(value)) {
+                return `[\n${value
+                    .map((item) => `${innerIndent}${formatAsJavascript(item, indentLevel + 1)}`)
+                    .join(",\n")}\n${indent}]`;
+            } else if (typeof value === "object" && value !== null) {
+                return `{\n${Object.entries(value)
+                    .map(
+                        ([key, val]) =>
+                            `${innerIndent}${key}: ${formatAsJavascript(val, indentLevel + 1)}`
+                    )
+                    .join(",\n")}\n${indent}}`;
+            } else if (typeof value === "string") {
+                return `'${value}'`;
+            } else { return String(value); }
+        }
+    </script>
+</body>
+
+</html>
